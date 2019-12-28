@@ -98,9 +98,6 @@
         daemon_reload: yes
         enabled: yes
         state: restarted
-
-    # - name: Put file kubeadm_join from master.
-    #   command: scp -o StrictHostKeyChecking=no vagrant@172.28.128.101:/home/vagrant/kubeadm_join_cmd.sh /home/vagrant/kubeadm_join_cmd.sh
     
     - name: Change file ownership, group and permissions
       file:
