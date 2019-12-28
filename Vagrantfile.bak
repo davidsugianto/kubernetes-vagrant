@@ -1,0 +1,69 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+KUBERNETES_RELEASE = "1.16"
+MASTER_IP = "172.28.128.101"
+NETWORK_BASE = "172.28.128"
+INTEGRATION_START_SEGMENT = 101
+NODE_COUNT = 3
+POD_NW_CIDR = "10.244.0.0/16"
+KUBE_TOKEN = "4h9yf0.y4ko3svpynhae0w4"
+
+VAGRANT_BOX = 'ubuntu/xenial64'
+
+Vagrant.configure("2") do |config|
+  config.vm.box = VAGRANT_BOX
+  config.vm.box_check_update = false
+
+  config.hostmanager.enabled = true
+  config.hostmanager.manage_guest = true
+
+  config.vm.provision "shell", inline: <<-SHELL
+    /vagrant/install.sh
+  SHELL
+
+  config.vm.provider "virtualbox" do |vb|
+    vb.memory = "1024"
+    vb.cpus   = "1"
+  end
+
+  # Define master
+  config.vm.define "master", primary: true do |node|
+    node.vm.network "private_network", ip: "#{NETWORK_BASE}.#{INTEGRATION_START_SEGMENT}"
+    # node.vm.network "forwarded_port", guest: 8443, host: 8443
+    node.hostmanager.aliases = %w(master.kubernetes.local etcd.kubernetes.local nfs.kubernetes.local)
+    node.vm.provider "virtualbox" do |vb|
+      vb.memory = "2048"
+      vb.cpus = "2"
+    end
+
+    node.vm.provision "shell", inline: <<-SHELL
+      hostnamectl set-hostname master.kubernetes.local
+      /vagrant/master.sh #{MASTER_IP} #{POD_NW_CIDR} #{KUBE_TOKEN}
+    SHELL
+  end
+
+  # Define nodes
+  (1..NODE_COUNT).each do |i|
+    config.vm.define "node0#{i}" do |node|
+      node.vm.network "private_network", ip: "#{NETWORK_BASE}.#{INTEGRATION_START_SEGMENT + i}"
+      node.vm.hostname = "node0#{i}.kubernetes.local"
+
+      if "#{i}" == "1"
+        node.hostmanager.aliases = %w(lb.kubernetes.local)
+      end
+
+      node.vm.provision "shell", inline: <<-SHELL
+        /vagrant/node.sh #{KUBE_TOKEN} #{MASTER_IP}
+      SHELL
+    end
+  end
+
+  config.vm.provision "file", source: "~/.ssh/id_rsa.pub", destination: "~/.ssh/authorized_keys"
+  config.vm.provision "shell", inline: <<-SHELL
+    sudo sed -i -e "\\#PasswordAuthentication yes# s#PasswordAuthentication yes#PasswordAuthentication no#g" /etc/ssh/sshd_config
+    sudo systemctl restart sshd.service
+    echo "finished ssh restarted"
+  SHELL
+  
+end
