@@ -1,1 +1,1 @@
-##High Availability Kubernetes cluster
+## High Availability Kubernetes cluster
